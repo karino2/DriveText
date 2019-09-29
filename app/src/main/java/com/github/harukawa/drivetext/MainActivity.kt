@@ -224,7 +224,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
                 // Except for md files
                 if(file.name.endsWith(EXTENSION) == false) continue
                 Log.d("getFileGoogleDrive","name${file.name}, id${file.id}")
-                isUpdate = checkData(file.name, file.id, Date(file.modifiedTime.value))
+                isUpdate = checkData(file.id, Date(file.modifiedTime.value))
                 if(isUpdate) {
                     //
                     val fileId = file.id
@@ -242,7 +242,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         }
     }
 
-    fun checkData(name: String, id: String, driveDate : Date) : Boolean {
+    fun checkData(id: String, driveDate : Date) : Boolean {
         val (_, date) = database.getData(id)
         val dbDate = Date(date)
         // When the update time of drive is the latest
