@@ -102,8 +102,8 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
                     R.id.delete_item -> {
                         launch {
                             val newCursor = async(Dispatchers.IO) {
-                                database.deleteEntries(entryAdapter.selectedIds)
                                 deleteLocalFiles(entryAdapter.selectedIds)
+                                database.deleteEntries(entryAdapter.selectedIds)
                                 queryCursor()
                             }
                             entryAdapter.swapCursor(newCursor.await())

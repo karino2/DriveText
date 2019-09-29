@@ -128,7 +128,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
                     launch(Dispatchers.Default) {
                         val (name, id, _) = database.getEntry(dbId)
-                        val path = applicationContext.filesDir.path + "/_" + name + EXTENSION
+                        val path = applicationContext.filesDir.path + "/" + fileId + "_" + name + EXTENSION
                         dc.updateFile(drive, path, name, id)
                         val (_, date) = dc.getFileIdAndDate(drive, name + EXTENSION, id)
                         database.updateDriveEntry(dbId, name, id, driveDate = date)
@@ -180,6 +180,8 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         val fileName = id + "_" + name + EXTENSION
         val input = this.openFileInput(fileName)
         val text = BufferedReader(InputStreamReader(input)).readLine() ?: ""
+        fileId = id
+        isSave = true
         editText.setText(text)
         titleText.setText(name)
         input.close()
