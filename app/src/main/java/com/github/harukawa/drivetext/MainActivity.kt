@@ -60,11 +60,10 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         job = Job()
         super.onStart()
         launch {
-            val query = async(Dispatchers.IO) {
+            val query = withContext(Dispatchers.IO) {
                 queryCursor()
             }
-            val curs = query.await()
-            entryAdapter.swapCursor(curs)
+            entryAdapter.swapCursor(query)
         }
     }
 
@@ -101,12 +100,12 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
                 when (item.itemId) {
                     R.id.delete_item -> {
                         launch {
-                            val newCursor = async(Dispatchers.IO) {
+                            val newCursor = withContext(Dispatchers.IO) {
                                 deleteLocalFiles(entryAdapter.selectedIds)
                                 database.deleteEntries(entryAdapter.selectedIds)
                                 queryCursor()
                             }
-                            entryAdapter.swapCursor(newCursor.await())
+                            entryAdapter.swapCursor(newCursor)
                             entryAdapter.isSelecting = false
                             mode.finish()
                         }
@@ -347,4 +346,3 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         }
     }
 }
-
