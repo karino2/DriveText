@@ -12,8 +12,8 @@ class DatabaseHolder(val context: Context){
     companion object {
         val ENTRY_TABLE_NAME = "drive"
     }
-    private val TAG = "TextShare"
-    private val DATABASE_NAME = "fileD.db"
+    private val TAG = "DriveText"
+    private val DATABASE_NAME = "fileDB.db"
     private val DATABASE_VERSION = 3
 
     val dbHelper : SQLiteOpenHelper by lazy {
@@ -152,19 +152,21 @@ fun DatabaseHolder.getEntry(id: Long): Triple<String, String, Long> {
         if(isAfterLast) {
             Triple("","",0L)
         } else {
+            // FILE_ID, FILE_ID, LOCAL_FILE_DATE
             Triple(this.getString(1), this.getString(2), this.getLong(3))
         }
     }
 }
 
-fun DatabaseHolder.getData(dbId : String): Pair<String, Long> {
+fun DatabaseHolder.getData(driveId : String): Pair<String, Long> {
     return query(DatabaseHolder.ENTRY_TABLE_NAME) {
-        where("FILE_ID=?",dbId)
+        where("FILE_ID=?",driveId)
     }.withClose{
         moveToFirst()
         if(isAfterLast){
             Pair("", 0L)
         } else {
+            // FILE_NAME, DRIVE_FILE_DATE
             Pair(this.getString(1), this.getLong(4))
         }
     }
@@ -198,7 +200,7 @@ fun DatabaseHolder.getId(fileName: String): Long {
 
 fun DatabaseHolder.getId(fileName: String, fileId: String): Long {
     return query(DatabaseHolder.ENTRY_TABLE_NAME) {
-        where("FILE_NAME=? AND FILE_ID",fileName, fileId)
+        where("FILE_NAME=? AND FILE_ID=?",fileName, fileId)
     }.withClose{
         moveToFirst()
         if(isAfterLast){

@@ -20,6 +20,7 @@ import com.google.android.gms.common.api.Scope
 import com.google.api.client.extensions.android.http.AndroidHttp
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.json.jackson2.JacksonFactory
+import com.google.api.client.util.DateTime
 import com.google.api.services.drive.Drive
 import com.google.api.services.drive.DriveScopes
 import kotlinx.coroutines.*
@@ -32,14 +33,14 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
     override val coroutineContext: CoroutineContext
         get() = Dispatchers.Main + job
 
-    fun showMessage(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
     val recyclerView by lazy {
         findViewById<RecyclerView>(R.id.recycler_view)
     }
 
+    private val TAG = "MainActivity"
+
     companion object {
         private const val REQUEST_GET_DATA = 0
-        private const val REQUEST_DOWNLOAD = 3
     }
 
     val entryAdapter = EntryAdapter(this)
@@ -128,7 +129,6 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         }
     }
 
-
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         getMenuInflater().inflate(R.menu.main_menu, menu);
         return super.onCreateOptionsMenu(menu)
@@ -179,21 +179,6 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
                     Log.d("failure connect","faile upload file")
                 }
             }
-            REQUEST_DOWNLOAD -> {
-                if (resultCode == Activity.RESULT_OK && data != null) {
-                    Log.d("file","resultCode == ${resultCode}")
-                    val dc = DriveConnecter()
-                    val drive = dc.setDriveConnect(data, this)
-
-                    launch(Dispatchers.Default) {
-                        val name = ""
-                        val id = ""
-                        dc.downLoadFile(drive, id, name,this@MainActivity)
-                    }
-                } else {
-                    Log.d("FailureDriveConnect","failed download")
-                }
-            }
         }
 
         super.onActivityResult(requestCode, resultCode, data)
@@ -211,33 +196,55 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
 
     // After rewrite to DriveConnecter
     fun updateFileAndDb(googleDriveService: Drive) {
+        var isUpdate = false
+        var isDownload = false
+
         launch(Dispatchers.Default) {
             val result = googleDriveService.files().list().apply {
                 q = "mimeType='text/plain'"
                 spaces = "drive"
-                fields = "nextPageToken, files(id, name, modifiedTime)"
+                fields = "nextPageToken, files(id, name, modifiedTime, parents)"
                 this.pageToken = pageToken
             }.execute()
-            var isUpdate = false
             for(file in result.files) {
-                // Except for md files
+
+                // Download only files in the specific folder
+                val parents = file.parents ?: mutableListOf()
+                var isParents = false
+                for(par in parents){
+                    Log.d(TAG, "file.parent:${par}, fileName:${file.name}")
+                    if(par == getString(R.string.parent_drive_file)) isParents = true
+                }
+                if(!isParents) continue
+
+                // Except for txt files
                 if(file.name.endsWith(EXTENSION) == false) continue
-                Log.d("getFileGoogleDrive","name${file.name}, id${file.id}")
-                isUpdate = checkData(file.id, Date(file.modifiedTime.value))
-                if(isUpdate) {
-                    //
-                    val fileId = file.id
-                    val outputStream: ByteArrayOutputStream = ByteArrayOutputStream()
-                    googleDriveService.files().export(fileId,"text/plain").executeMediaAndDownloadTo(outputStream)
-                    val fileName = file.id + "_" + file.name + EXTENSION
-                    openFileOutput(fileName, Context.MODE_PRIVATE).use{
-                        it.write(outputStream.toByteArray())
+
+                isUpdate = false
+                isDownload = false
+                Log.d("getFileGoogleDrive","name:${file.name}, id${file.id}")
+
+                val (db_name, _) = database.getData(file.id)
+                if(db_name == "") isDownload = true
+                if(!isDownload) {
+                    isUpdate = checkData(file.id, Date(file.modifiedTime.value))
+                }
+                if(isUpdate || isDownload) {
+                    // Get file data from drive
+                    val driveName = file.name.removeSuffix(".txt")
+                    val fileName = file.id + "_" + driveName
+                    downLoadFile(googleDriveService, file.id.toString(), fileName)
+
+                    if(isUpdate) {
+                        val dbId = database.getId(file.name, file.id)
+                        database.updateEntry(dbId, driveName, Date(), Date(file.modifiedTime.value))
                     }
-                    outputStream.close()
-                    val dbId = database.getId(file.name, file.id)
-                    database.updateEntry(dbId, file.name, Date(), Date(file.modifiedTime.value))
+                    if(isDownload) {
+                        database.insertEntry(driveName, file.id, Date(), Date(file.modifiedTime.value))
+                    }
                 }
             }
+            // finish download and update
         }
     }
 
@@ -252,6 +259,17 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         }
     }
 
+    suspend fun downLoadFile(googleDriveService: Drive, id : String, name : String) {
+
+        // Download file refers to https://developers.google.com/drive/api/v3/manage-downloads
+        val outputStream: ByteArrayOutputStream = ByteArrayOutputStream()
+        googleDriveService.files().get(id).executeMediaAndDownloadTo(outputStream)
+        openFileOutput(name + EXTENSION, Context.MODE_PRIVATE).use{
+            it.write(outputStream.toByteArray())
+        }
+        outputStream.close()
+        Log.d("google download", "download file ${Date()}")
+    }
 
     override fun onStop() {
         super.onStop()
