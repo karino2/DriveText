@@ -330,10 +330,12 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
                     } ?: false
                 }
                 itemView.setOnClickListener {
-                    if(isSelecting)
+                    if(isSelecting) {
+                        it.setBackgroundResource(R.color.colorSelected)
                         toggleSelect(it)
-                    else
+                    } else {
                         editItem(it.tag as Long)
+                    }
                 }
             }
         }
@@ -343,6 +345,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
             if(curs == null)
                 throw IllegalStateException("onViewViewHolder called when cursor is null. What's situation?")
             curs.moveToPosition(position)
+            holder.itemView.setBackgroundResource(R.color.colorDefault)
             holder.textView.text = curs.getString(1)
             holder.itemView.tag = curs.getLong(0)
         }
