@@ -27,6 +27,7 @@ import kotlinx.coroutines.*
 import java.io.ByteArrayOutputStream
 import java.util.*
 import kotlin.coroutines.CoroutineContext
+import android.preference.PreferenceManager
 
 class MainActivity : AppCompatActivity(), CoroutineScope {
     lateinit var job: Job
@@ -144,6 +145,11 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
             updateFile()
             true
         }
+        R.id.action_setting -> {
+            val intent = Intent(this,SettingsActivity::class.java)
+            startActivity(intent)
+            true
+        }
         else -> {
             super.onOptionsItemSelected(item)
         }
@@ -198,6 +204,8 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
     fun updateFileAndDb(googleDriveService: Drive) {
         var isUpdate = false
         var isDownload = false
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val parentId = prefs.getString("drive_parent_path", "")
 
         launch(Dispatchers.Default) {
             val result = googleDriveService.files().list().apply {
@@ -213,7 +221,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
                 var isParents = false
                 for(par in parents){
                     Log.d(TAG, "file.parent:${par}, fileName:${file.name}")
-                    if(par == getString(R.string.parent_drive_file)) isParents = true
+                    if(par == parentId) isParents = true
                 }
                 if(!isParents) continue
 

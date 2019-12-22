@@ -11,4 +11,9 @@
             android:title="new"
             android:icon="@android:drawable/ic_menu_add"
             app:showAsAction="always"/>
+    <item
+            android:id="@+id/action_setting"
+            android:title="setting"
+            android:icon="@android:drawable/ic_menu_preferences"
+            app:showAsAction="always"/>
 </menu>

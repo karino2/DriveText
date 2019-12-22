@@ -19,6 +19,8 @@
         </activity>
         <activity android:name="com.github.harukawa.drivetext.TextEditorActivity">
         </activity>
+        <activity android:name="com.github.harukawa.drivetext.SettingsActivity">
+        </activity>
     </application>
 
 </manifest>

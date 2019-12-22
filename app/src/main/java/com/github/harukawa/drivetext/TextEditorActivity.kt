@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.preference.PreferenceManager
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
@@ -248,11 +249,13 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         // Uploading file refers to https://developers.google.com/drive/api/v3/manage-uploads
         // To make FileContent with file's URI, the pdf file is saved as a temp file.
         val type = "text/plain"
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val parentId = prefs.getString("drive_parent_path", "")
 
         val blobMd = FileContent(type, File(filePath))
         val targetDriveFile = DriveFile()
         targetDriveFile.name = fileName + EXTENSION
-        targetDriveFile.parents = arrayListOf(getString(R.string.parent_drive_file))
+        if(parentId != "") targetDriveFile.parents = arrayListOf(parentId)
         try {
             googleDriveService.files().create(targetDriveFile, blobMd)
                 .setFields("id, mimeType, modifiedTime")
