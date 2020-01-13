@@ -3,4 +3,6 @@
     <string name="file_name">ファイル名</string>
     <string name="parent_drive_file">ドライブファイルID</string>
     <string name="file_id"></string>
+    <string name="default_extension">.txt</string>
+    <string name="title_extension">ファイル拡張子</string>
 </resources>

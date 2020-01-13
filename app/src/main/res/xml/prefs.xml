@@ -6,4 +6,8 @@
         app:key="drive_parent_path"
         app:defaultValue="@string/file_id"
         app:title="@string/parent_drive_file"/>
+<EditTextPreference
+        app:key="extension"
+        app:defaultValue="@string/default_extension"
+        app:title="@string/title_extension"/>
 </androidx.preference.PreferenceScreen>

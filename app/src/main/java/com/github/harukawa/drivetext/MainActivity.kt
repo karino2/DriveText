@@ -49,7 +49,6 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
     val database by lazy { DatabaseHolder(this) }
     val SELECT_FIELDS = arrayOf("_id", "FILE_NAME")
     val ORDER_SENTENCE = "_id DESC"
-    val EXTENSION = ".txt"
 
     private fun queryCursor(): Cursor {
         return database.query(DatabaseHolder.ENTRY_TABLE_NAME) {
@@ -84,7 +83,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
     fun deleteLocalFiles(ids: List<Long>) {
         ids.forEach {
             val (name, id, _) = database.getEntry(it)
-            val fileName = id + "_" + name + EXTENSION
+            val fileName = id + "_" + name
             deleteFile(fileName)
         }
     }
@@ -225,9 +224,6 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
                 }
                 if(!isParents) continue
 
-                // Except for txt files
-                if(file.name.endsWith(EXTENSION) == false) continue
-
                 isUpdate = false
                 isDownload = false
                 Log.d("getFileGoogleDrive","name:${file.name}, id${file.id}")
@@ -239,7 +235,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
                 }
                 if(isUpdate || isDownload) {
                     // Get file data from drive
-                    val driveName = file.name.removeSuffix(".txt")
+                    val driveName = file.name
                     val fileName = file.id + "_" + driveName
                     downLoadFile(googleDriveService, file.id.toString(), fileName)
 
@@ -272,7 +268,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         // Download file refers to https://developers.google.com/drive/api/v3/manage-downloads
         val outputStream: ByteArrayOutputStream = ByteArrayOutputStream()
         googleDriveService.files().get(id).executeMediaAndDownloadTo(outputStream)
-        openFileOutput(name + EXTENSION, Context.MODE_PRIVATE).use{
+        openFileOutput(name, Context.MODE_PRIVATE).use{
             it.write(outputStream.toByteArray())
         }
         outputStream.close()

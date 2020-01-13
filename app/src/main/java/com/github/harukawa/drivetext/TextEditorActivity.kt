@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -60,7 +61,6 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     var dbId : Long = -1L
     var fileId = ""
     var isSave = false
-    val EXTENSION = ".txt"
 
     private val editText: EditText by lazy {
         findViewById<TextView>(R.id.editText) as EditText
@@ -73,12 +73,17 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_text_editor)
-        editText.setText("")
+
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val EXTENSION = prefs.getString("extension", ".txt")
 
         dbId = intent.getLongExtra("DB_ID",-1L)
         if(dbId != -1L) {
             isSave = true
             readFile()
+        } else {
+            editText.setText("")
+            titleText.setText("name"+EXTENSION)
         }
 
         val account = GoogleSignIn.getLastSignedInAccount(this) ?: GoogleSignInAccount.createDefault()
@@ -119,15 +124,15 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     Log.d("file","resultCode == ${resultCode}")
                     val drive = setDriveConnect(data, this)
                     val (name, _, _) = database.getEntry(dbId)
-                    val path = applicationContext.filesDir.path + "/_" + name + EXTENSION
+                    val path = applicationContext.filesDir.path + "/_" + name
 
                     launch(Dispatchers.Default) {
                         uploadFile(drive, path, name)
-                        val (id, date) = getFileIdAndDate(drive, name + EXTENSION)
+                        val (id, date) = getFileIdAndDate(drive, name)
                         database.updateDriveEntry(dbId, name, id, driveDate = date)
                         Log.d("DriveUpload", "dbId:${dbId}, name:${name}, id:${id}")
 
-                        renameFile("_" + name + EXTENSION, id + "_" + name + EXTENSION)
+                        renameFile("_" + name, id + "_" + name)
                         finish()
                     }
                 } else {
@@ -139,11 +144,11 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     Log.d("file","resultCode == ${resultCode}")
                     val drive = setDriveConnect(data, this)
                     val (name, id, _) = database.getEntry(dbId)
-                    val path = applicationContext.filesDir.path + "/" + id + "_" + name + EXTENSION
+                    val path = applicationContext.filesDir.path + "/" + id + "_" + name
 
                     launch(Dispatchers.Default) {
                         updateFile(drive, path, name, id)
-                        val (_, date) = getFileIdAndDate(drive, name + EXTENSION, id)
+                        val (_, date) = getFileIdAndDate(drive, name, id)
                         database.updateDriveEntry(dbId, name, id, driveDate = date)
                         finish()
                     }
@@ -158,7 +163,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
     fun saveFile() {
         val title = titleEditText.text.toString()
-        val fileName = fileId + "_" + title + EXTENSION
+        val fileName = if(isSave) fileId + "_" + title else fileId + "_" + title
 
         openFileOutput(fileName, Context.MODE_PRIVATE).use {
             it.write(editText.text.toString().toByteArray())
@@ -191,13 +196,20 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
     fun readFile() {
         val (name, id, _) = database.getEntry(dbId)
-        val fileName = id + "_" + name + EXTENSION
+        val fileName = id + "_" + name
         val input = this.openFileInput(fileName)
         val text = BufferedReader(InputStreamReader(input)).readText() ?: ""
         fileId = id
         isSave = true
         editText.setText(text)
-        titleText.setText(name)
+
+        if(id != "") {
+            titleText.setText(name)
+        } else {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+            val EXTENSION = prefs.getString("extension", ".txt")
+            titleText.setText(name+EXTENSION)
+        }
         input.close()
     }
 
@@ -254,7 +266,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
         val blobMd = FileContent(type, File(filePath))
         val targetDriveFile = DriveFile()
-        targetDriveFile.name = fileName + EXTENSION
+        targetDriveFile.name = fileName
         if(parentId != "") targetDriveFile.parents = arrayListOf(parentId)
         try {
             googleDriveService.files().create(targetDriveFile, blobMd)
@@ -271,7 +283,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         // Uploading file refers to https://developers.google.com/drive/api/v3/manage-uploads
         val blobMd = FileContent("text/plain", File(filePath))
         val targetDriveFile = DriveFile()
-        targetDriveFile.name = fileName + EXTENSION
+        targetDriveFile.name = fileName
         Log.d("GoogleUpdateFile","name:${fileName}, id${fileId}")
 
         try {
