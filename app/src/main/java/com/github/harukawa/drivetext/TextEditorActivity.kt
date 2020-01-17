@@ -123,16 +123,17 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                 if (resultCode == Activity.RESULT_OK && data != null) {
                     Log.d("file","resultCode == ${resultCode}")
                     val drive = setDriveConnect(data, this)
-                    val (name, _, _) = database.getEntry(dbId)
-                    val path = applicationContext.filesDir.path + "/_" + name
+                    val localFile = database.getLocalFile(dbId).discardId()
+                    val path = applicationContext.filesDir.path + "/_" + localFile.name
 
                     launch(Dispatchers.Default) {
-                        uploadFile(drive, path, name)
-                        val (id, date) = getFileIdAndDate(drive, name)
-                        database.updateDriveEntry(dbId, name, id, driveDate = date)
-                        Log.d("DriveUpload", "dbId:${dbId}, name:${name}, id:${id}")
+                        uploadFile(drive, path, localFile.name)
+                        val (id, date) = getFileIdAndDate(drive, localFile)
+                        val newLocalFile = LocalFile(localFile.name, id, 0L)
+                        database.updateDriveEntry(dbId, newLocalFile, driveDate = date)
+                        Log.d("DriveUpload", "dbId:${dbId}, name:${localFile.name}, id:${id}")
 
-                        renameFile("_" + name, id + "_" + name)
+                        renameFile("_" + localFile.name, id + "_" + localFile.name)
                         finish()
                     }
                 } else {
@@ -143,13 +144,13 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                 if (resultCode == Activity.RESULT_OK && data != null) {
                     Log.d("file","resultCode == ${resultCode}")
                     val drive = setDriveConnect(data, this)
-                    val (name, id, _) = database.getEntry(dbId)
-                    val path = applicationContext.filesDir.path + "/" + id + "_" + name
+                    val localFile = database.getLocalFile(dbId)
+                    val path = applicationContext.filesDir.path + "/" + localFile.fileName
 
                     launch(Dispatchers.Default) {
-                        updateFile(drive, path, name, id)
-                        val (_, date) = getFileIdAndDate(drive, name, id)
-                        database.updateDriveEntry(dbId, name, id, driveDate = date)
+                        updateFile(drive, path, localFile)
+                        val (_, date) = getFileIdAndDate(drive, localFile)
+                        database.updateDriveEntry(dbId, localFile, driveDate = date)
                         finish()
                     }
                 } else {
@@ -182,9 +183,8 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
     fun sentFile() {
         saveFile()
-        val (name, id, _) = database.getEntry(dbId)
-        Log.d("DriveUpload", "dbid ${dbId}, name:${name}, id:${id}")
-        val request = if(id == "") REQUEST_UPLOAD else REQUEST_UPDATE
+        val localFile = database.getLocalFile(dbId)
+        val request = if(localFile.fileId == "") REQUEST_UPLOAD else REQUEST_UPDATE
 
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestScopes(Scope(DriveScopes.DRIVE)).requestEmail()
@@ -195,20 +195,20 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     }
 
     fun readFile() {
-        val (name, id, _) = database.getEntry(dbId)
-        val fileName = id + "_" + name
+        val localFile = database.getLocalFile(dbId)
+        val fileName = localFile.fileName
         val input = this.openFileInput(fileName)
         val text = BufferedReader(InputStreamReader(input)).readText() ?: ""
-        fileId = id
+        fileId = localFile.fileId
         isSave = true
         editText.setText(text)
 
-        if(id != "") {
-            titleText.setText(name)
+        if(localFile.fileId != "") {
+            titleText.setText(localFile.name)
         } else {
             val prefs = PreferenceManager.getDefaultSharedPreferences(this)
             val EXTENSION = prefs.getString("extension", ".txt")
-            titleText.setText(name+EXTENSION)
+            titleText.setText(localFile.name+EXTENSION)
         }
         input.close()
     }
@@ -238,7 +238,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         return googleDriveService
     }
 
-    suspend fun getFileIdAndDate(googleDriveService: Drive, name : String, id : String = "") : Pair<String, Date> {
+    suspend fun getFileIdAndDate(googleDriveService: Drive, localFile: LocalFile) : Pair<String, Date> {
         val pageToken : String? = null
         val result = googleDriveService.files().list().apply {
             q = "mimeType='text/plain'"
@@ -249,7 +249,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         var fileDate : DateTime = DateTime(0)
         var fileId = ""
         for(file in result.files) {
-            if(file.name == name && (id == "" || id == file.id)) {
+            if(localFile.isMatch(file)) {
                 fileId = file.id
                 fileDate = file.modifiedTime
             }
@@ -279,18 +279,17 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         }
     }
 
-    suspend fun updateFile(googleDriveService: Drive, filePath: String, fileName: String, fileId: String) {
+    suspend fun updateFile(googleDriveService: Drive, filePath: String, localFile: LocalFile) {
         // Uploading file refers to https://developers.google.com/drive/api/v3/manage-uploads
         val blobMd = FileContent("text/plain", File(filePath))
         val targetDriveFile = DriveFile()
-        targetDriveFile.name = fileName
-        Log.d("GoogleUpdateFile","name:${fileName}, id${fileId}")
+        targetDriveFile.name = localFile.fileName
 
         try {
-            googleDriveService.files().update(fileId, targetDriveFile, blobMd)
+            googleDriveService.files().update(localFile.fileId, targetDriveFile, blobMd)
                 .execute()
         } catch (e: UserRecoverableAuthIOException) {
-            Log.d("GoogleSign","Error first Lognin :${e.toString()}")
+            Log.d("GoogleSign","Error first Login :${e.toString()}")
             val mIntent = e.intent
             startActivityForResult(mIntent, REQUEST_UPDATE)
         }
