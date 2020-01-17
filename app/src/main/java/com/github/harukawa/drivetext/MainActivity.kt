@@ -82,9 +82,8 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
 
     fun deleteLocalFiles(ids: List<Long>) {
         ids.forEach {
-            val (name, id, _) = database.getEntry(it)
-            val fileName = id + "_" + name
-            deleteFile(fileName)
+            val localFile = database.getLocalFile(it)
+            deleteFile(localFile.fileName)
         }
     }
 

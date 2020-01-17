@@ -124,10 +124,10 @@ fun DatabaseHolder.updateEntry(id: Long, fileName: String, fileId: String,localD
     database.update(DatabaseHolder.ENTRY_TABLE_NAME, values, "_id=?", arrayOf(id.toString()))
 }
 
-fun DatabaseHolder.updateDriveEntry(id: Long, fileName: String, fileId: String, driveDate: Date) {
+fun DatabaseHolder.updateDriveEntry(id: Long, localFile: LocalFile, driveDate: Date) {
     val values = ContentValues()
-    values.put("FILE_NAME", fileName)
-    values.put("FILE_ID", fileId)
+    values.put("FILE_NAME", localFile.name)
+    values.put("FILE_ID", localFile.fileId)
     values.put("DRIVE_FILE_DATE", driveDate.time.toLong())
     database.update(DatabaseHolder.ENTRY_TABLE_NAME, values, "_id=?", arrayOf(id.toString()))
 }
@@ -144,16 +144,15 @@ inline fun <reified T> Cursor.withClose(body: Cursor.()->T) : T{
     return res
 }
 
-fun DatabaseHolder.getEntry(id: Long): Triple<String, String, Long> {
+fun DatabaseHolder.getLocalFile(id: Long): LocalFile {
     return query(DatabaseHolder.ENTRY_TABLE_NAME) {
         where("_id=?", id.toString())
     }.withClose{
         moveToFirst()
         if(isAfterLast) {
-            Triple("","",0L)
+            LocalFile("", "", 0L)
         } else {
-            // FILE_ID, FILE_ID, LOCAL_FILE_DATE
-            Triple(this.getString(1), this.getString(2), this.getLong(3))
+            LocalFile(this.getString(1), this.getString(2), this.getLong(3))
         }
     }
 }
