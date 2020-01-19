@@ -85,15 +85,6 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             editText.setText("")
             titleText.setText("name"+EXTENSION)
         }
-
-        val account = GoogleSignIn.getLastSignedInAccount(this) ?: GoogleSignInAccount.createDefault()
-
-        if(GoogleSignIn.hasPermissions(account, Scope(DriveScopes.DRIVE))){
-            Log.d("GoogleSign", "has Drive Scope")
-        } else {
-            Log.d("GoogleSign", "not have Drive Scope")
-        }
-
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -116,12 +107,10 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        Log.d("request Result", "requestCode : ${requestCode}")
         when(requestCode) {
             REQUEST_UPLOAD -> {
                 //https://developers.google.com/api-client-library/java/google-api-java-client/media-upload
                 if (resultCode == Activity.RESULT_OK && data != null) {
-                    Log.d("file","resultCode == ${resultCode}")
                     val drive = setDriveConnect(data, this)
                     val localFile = database.getLocalFile(dbId).discardId()
                     val path = applicationContext.filesDir.path + "/_" + localFile.name
@@ -131,7 +120,6 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                         val (id, date) = getFileIdAndDate(drive, localFile)
                         val newLocalFile = LocalFile(localFile.name, id, 0L)
                         database.updateDriveEntry(dbId, newLocalFile, driveDate = date)
-                        Log.d("DriveUpload", "dbId:${dbId}, name:${localFile.name}, id:${id}")
 
                         renameFile("_" + localFile.name, id + "_" + localFile.name)
                         finish()
@@ -142,7 +130,6 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             }
             REQUEST_UPDATE -> {
                 if (resultCode == Activity.RESULT_OK && data != null) {
-                    Log.d("file","resultCode == ${resultCode}")
                     val drive = setDriveConnect(data, this)
                     val localFile = database.getLocalFile(dbId)
                     val path = applicationContext.filesDir.path + "/" + localFile.fileName
@@ -178,7 +165,6 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         }
         isSave = true
         dbId = database.getId(title)
-        Log.d("saveFile", "dbId:${dbId}, fileName:${titleEditText.text.toString()},Date:${cuDate} ")
     }
 
     fun sentFile() {

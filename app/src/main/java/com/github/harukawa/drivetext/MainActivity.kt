@@ -171,12 +171,10 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        Log.d("request Result", "requestCode : ${requestCode}")
         when(requestCode) {
             REQUEST_GET_DATA -> {
                 //https://developers.google.com/api-client-library/java/google-api-java-client/media-upload
                 if (resultCode == Activity.RESULT_OK && data != null) {
-                    Log.d("file","resultCode == ${resultCode}")
                     val drive = setDriveConnect(data)
                     updateFileAndDb(drive)
                 } else {
@@ -217,14 +215,12 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
                 val parents = file.parents ?: mutableListOf()
                 var isParents = false
                 for(par in parents){
-                    Log.d(TAG, "file.parent:${par}, fileName:${file.name}")
                     if(par == parentId) isParents = true
                 }
                 if(!isParents) continue
 
                 isUpdate = false
                 isDownload = false
-                Log.d("getFileGoogleDrive","name:${file.name}, id${file.id}")
 
                 val (db_name, _) = database.getData(file.id)
                 if(db_name == "") isDownload = true
@@ -270,7 +266,6 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
             it.write(outputStream.toByteArray())
         }
         outputStream.close()
-        Log.d("google download", "download file ${Date()}")
     }
 
     override fun onStop() {
