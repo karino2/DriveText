@@ -112,15 +112,22 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                 //https://developers.google.com/api-client-library/java/google-api-java-client/media-upload
                 if (resultCode == Activity.RESULT_OK && data != null) {
                     val drive = setDriveConnect(data, this)
+
+                    // Get local file information to upload
                     val localFile = database.getLocalFile(dbId).discardId()
                     val path = applicationContext.filesDir.path + "/_" + localFile.name
 
                     launch(Dispatchers.Default) {
                         uploadFile(drive, path, localFile.name)
+
+                        // Get GoogleDriveID of uploaded file and upload time
                         val (id, date) = getFileIdAndDate(drive, localFile)
+
+                        // Update database information
                         val newLocalFile = LocalFile(localFile.name, id, 0L)
                         database.updateDriveEntry(dbId, newLocalFile, driveDate = date)
 
+                        // Add GoogleDrive ID to local file name to check if uploading or not.
                         renameFile("_" + localFile.name, id + "_" + localFile.name)
                         finish()
                     }
@@ -136,7 +143,11 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
                     launch(Dispatchers.Default) {
                         updateFile(drive, path, localFile)
+
+                        // Get GoogleDriveID of uploaded file and upload time
                         val (_, date) = getFileIdAndDate(drive, localFile)
+
+                        // Update database information
                         database.updateDriveEntry(dbId, localFile, driveDate = date)
                         finish()
                     }
@@ -247,18 +258,23 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         // Uploading file refers to https://developers.google.com/drive/api/v3/manage-uploads
         // To make FileContent with file's URI, the pdf file is saved as a temp file.
         val type = "text/plain"
+
+        // If you have set the Google Drive folder ID, get that ID.
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val parentId = prefs.getString("drive_parent_path", "")
 
+        // Upload file settings.
         val blobMd = FileContent(type, File(filePath))
         val targetDriveFile = DriveFile()
         targetDriveFile.name = fileName
         if(parentId != "") targetDriveFile.parents = arrayListOf(parentId)
+
         try {
             googleDriveService.files().create(targetDriveFile, blobMd)
                 .setFields("id, mimeType, modifiedTime")
                 .execute()
         }  catch (e: UserRecoverableAuthIOException) {
+            // Only the first time an error appears, so take out the intent and upload it again.
             Log.d("GoogleSign","Error first Lognin :${e.toString()}")
             val mIntent = e.intent
             startActivityForResult(mIntent, REQUEST_UPLOAD)
@@ -267,6 +283,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
     suspend fun updateFile(googleDriveService: Drive, filePath: String, localFile: LocalFile) {
         // Uploading file refers to https://developers.google.com/drive/api/v3/manage-uploads
+        // Update file settings.
         val blobMd = FileContent("text/plain", File(filePath))
         val targetDriveFile = DriveFile()
         targetDriveFile.name = localFile.fileName
@@ -275,6 +292,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             googleDriveService.files().update(localFile.fileId, targetDriveFile, blobMd)
                 .execute()
         } catch (e: UserRecoverableAuthIOException) {
+            // Only the first time an error appears, so take out the intent and upload it again.
             Log.d("GoogleSign","Error first Login :${e.toString()}")
             val mIntent = e.intent
             startActivityForResult(mIntent, REQUEST_UPDATE)
