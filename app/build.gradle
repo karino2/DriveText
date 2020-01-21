@@ -51,5 +51,6 @@ dependencies {
 
     implementation 'com.android.support:recyclerview-v7:28.0.0'
     implementation 'androidx.preference:preference:1.1.0-beta01'
+    implementation project(':listtextview')
 
 }
