@@ -286,7 +286,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         // Update file settings.
         val blobMd = FileContent("text/plain", File(filePath))
         val targetDriveFile = DriveFile()
-        targetDriveFile.name = localFile.fileName
+        targetDriveFile.name = localFile.name
 
         try {
             googleDriveService.files().update(localFile.fileId, targetDriveFile, blobMd)
