@@ -158,7 +158,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
     fun saveFile() {
         val title = titleEditText.text.toString()
-        val fileName = if(isSave) fileId + "_" + title else fileId + "_" + title
+        val fileName = fileId + "_" + title
 
         openFileOutput(fileName, Context.MODE_PRIVATE).use {
             it.write(listTextView.text.toByteArray())
