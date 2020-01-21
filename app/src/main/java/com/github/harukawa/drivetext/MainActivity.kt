@@ -206,7 +206,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         launch(Dispatchers.Default) {
             val result = googleDriveService.files().list().apply {
                 spaces = "drive"
-                q = "trashed=false"
+                q = "trashed=false and mimeType!='application/vnd.google-apps.folder'"
                 fields = "nextPageToken, files(id, name, modifiedTime, parents)"
                 this.pageToken = pageToken
             }.execute()
