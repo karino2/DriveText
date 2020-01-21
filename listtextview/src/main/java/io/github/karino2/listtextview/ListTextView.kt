@@ -55,6 +55,8 @@ class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont
         }
     }
 
+    var modified = false
+
     fun handleOnActivityResult(requestCode: Int, resultCode: Int, data: Intent) : Boolean {
         if(requestCode == editActivityRequestCode) {
             if(resultCode == Activity.RESULT_OK) {
@@ -68,6 +70,7 @@ class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont
                     textSplitter.textList[cellId] = content
                     adapter.notifyDataSetChanged()
                 }
+                modified = true
             }
             return true
         }

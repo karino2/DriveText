@@ -83,10 +83,6 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     }
 
     override fun onOptionsItemSelected(item: MenuItem) = when (item.itemId) {
-        R.id.action_save -> {
-            saveFile()
-            true
-        }
         R.id.action_sent -> {
             sentFile()
             true
@@ -98,8 +94,13 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         data?.let {
-            if(listTextView.handleOnActivityResult(requestCode, resultCode, it))
+            if(listTextView.handleOnActivityResult(requestCode, resultCode, it)) {
+                if(listTextView.modified) {
+                    saveFile()
+                    listTextView.modified = false
+                }
                 return
+            }
         }
 
         when(requestCode) {
