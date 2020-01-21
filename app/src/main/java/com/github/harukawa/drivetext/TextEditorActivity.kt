@@ -53,6 +53,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         findViewById<ListTextView>(R.id.listTextView).apply {
             this.editActivityRequestCode = REQUEST_EDIT_CELL_CODE
             this.owner = this@TextEditorActivity
+            this.onDatasetChangedListener = { saveFile() }
         }
     }
 
@@ -95,10 +96,6 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         data?.let {
             if(listTextView.handleOnActivityResult(requestCode, resultCode, it)) {
-                if(listTextView.modified) {
-                    saveFile()
-                    listTextView.modified = false
-                }
                 return
             }
         }
