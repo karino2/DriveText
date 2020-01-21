@@ -1,44 +1,30 @@
 package com.github.harukawa.drivetext
 
-import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.preference.PreferenceManager
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.EditText
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.Scopes
-import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
-import com.google.android.gms.tasks.Task
 import com.google.api.client.extensions.android.http.AndroidHttp
-import com.google.api.client.googleapis.batch.json.JsonBatchCallback
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.googleapis.extensions.android.gms.auth.UserRecoverableAuthIOException
-import com.google.api.client.googleapis.json.GoogleJsonError
-import com.google.api.client.http.ByteArrayContent
 import com.google.api.client.http.FileContent
-import com.google.api.client.http.HttpHeaders
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.client.util.DateTime
 import com.google.api.services.drive.Drive
 import com.google.api.services.drive.DriveScopes
-import com.google.api.services.drive.model.Permission
+import io.github.karino2.listtextview.ListTextView
 import kotlinx.android.synthetic.main.activity_text_editor.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +40,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     companion object {
         private const val REQUEST_UPLOAD = 1
         private const val REQUEST_UPDATE = 2
+        private const val REQUEST_EDIT_CELL_CODE=3
     }
 
     val database by lazy { DatabaseHolder(this) }
@@ -62,8 +49,11 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     var fileId = ""
     var isSave = false
 
-    private val editText: EditText by lazy {
-        findViewById<TextView>(R.id.editText) as EditText
+    private val listTextView: ListTextView by lazy {
+        findViewById<ListTextView>(R.id.listTextView).apply {
+            this.editActivityRequestCode = REQUEST_EDIT_CELL_CODE
+            this.owner = this@TextEditorActivity
+        }
     }
 
     private val titleText: EditText by lazy {
@@ -82,7 +72,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             isSave = true
             readFile()
         } else {
-            editText.setText("")
+            listTextView.text = ""
             titleText.setText("name"+EXTENSION)
         }
     }
@@ -107,6 +97,11 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        data?.let {
+            if(listTextView.handleOnActivityResult(requestCode, resultCode, it))
+                return
+        }
+
         when(requestCode) {
             REQUEST_UPLOAD -> {
                 //https://developers.google.com/api-client-library/java/google-api-java-client/media-upload
@@ -165,7 +160,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         val fileName = if(isSave) fileId + "_" + title else fileId + "_" + title
 
         openFileOutput(fileName, Context.MODE_PRIVATE).use {
-            it.write(editText.text.toString().toByteArray())
+            it.write(listTextView.text.toByteArray())
         }
 
         val cuDate = Date()
@@ -198,7 +193,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         val text = BufferedReader(InputStreamReader(input)).readText() ?: ""
         fileId = localFile.fileId
         isSave = true
-        editText.setText(text)
+        listTextView.text = text
 
         if(localFile.fileId != "") {
             titleText.setText(localFile.name)
