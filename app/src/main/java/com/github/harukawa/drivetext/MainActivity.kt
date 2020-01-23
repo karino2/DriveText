@@ -243,6 +243,10 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
                 }
             }
             // finish download and update
+            val query =  queryCursor()
+            withContext(Dispatchers.Main) {
+                entryAdapter.swapCursor(query)
+            }
         }
     }
 
