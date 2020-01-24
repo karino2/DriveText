@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.provider.ContactsContract
 import android.util.Log
 import java.util.*
 
@@ -136,6 +137,10 @@ fun DatabaseHolder.deleteEntries(ids: List<Long>) {
     ids.forEach {
         database.delete(DatabaseHolder.ENTRY_TABLE_NAME, "_id=?", arrayOf(it.toString()))
     }
+}
+
+fun DatabaseHolder.deleteAll() {
+    database.delete(DatabaseHolder.ENTRY_TABLE_NAME, null, null)
 }
 
 inline fun <reified T> Cursor.withClose(body: Cursor.()->T) : T{
