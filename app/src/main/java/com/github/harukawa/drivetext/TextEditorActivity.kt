@@ -111,6 +111,13 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     val path = applicationContext.filesDir.path + "/_" + localFile.name
 
                     launch(Dispatchers.Default) {
+                        /*
+                        Upload a local file to GoogleDrive.
+                        After uploading, get the file ID and upload time from Drive
+                        and add them to the database.
+                        Finally, append id to local file name.
+                         */
+                        
                         uploadFile(drive, path, localFile.name)
 
                         // Get GoogleDriveID of uploaded file and upload time
