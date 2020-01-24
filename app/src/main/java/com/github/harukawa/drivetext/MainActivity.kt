@@ -28,6 +28,7 @@ import java.io.ByteArrayOutputStream
 import java.util.*
 import kotlin.coroutines.CoroutineContext
 import android.preference.PreferenceManager
+import androidx.appcompat.app.AlertDialog
 
 class MainActivity : AppCompatActivity(), CoroutineScope {
     lateinit var job: Job
@@ -146,6 +147,23 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         R.id.action_setting -> {
             val intent = Intent(this,SettingsActivity::class.java)
             startActivity(intent)
+            true
+        }
+        R.id.action_delete_data -> {
+            val dialog = AlertDialog.Builder(this)
+            dialog.setMessage(R.string.dialog_delete_message)
+                .setPositiveButton(R.string.yes) { _, _ ->
+                    database.deleteAll()
+                    this.filesDir.deleteRecursively()
+                    val query =  queryCursor()
+                    entryAdapter.swapCursor(query)
+                }
+                .setNegativeButton(R.string.no) { _, _ ->
+                    // User cancelled the dialog
+                }
+            // Create the AlertDialog object and return it
+            dialog.create()
+            dialog.show()
             true
         }
         else -> {
