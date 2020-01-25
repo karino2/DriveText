@@ -104,6 +104,19 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             REQUEST_UPLOAD -> {
                 //https://developers.google.com/api-client-library/java/google-api-java-client/media-upload
                 if (resultCode == Activity.RESULT_OK && data != null) {
+                    /*
+                    Upload a local file to GoogleDrive.
+                    Upload a file that has no files on GoogleDrive and exists only locally.
+                    Use the file name and path to upload GoogleDrive.
+                    The id is also used for updating.
+                    Since there is no id in the file before uploading,
+                    empty characters are registered in the database.
+                    Since id is specified by GoogleDrive,
+                    after uploading it is obtained based on the file name.
+                    After obtaining the id, use the id to determine the file.
+                     */
+
+
                     val drive = setDriveConnect(data, this)
 
                     // Get local file information to upload
@@ -111,13 +124,6 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     val path = applicationContext.filesDir.path + "/_" + localFile.name
 
                     launch(Dispatchers.Default) {
-                        /*
-                        Upload a local file to GoogleDrive.
-                        After uploading, get the file ID and upload time from Drive
-                        and add them to the database.
-                        Finally, append id to local file name.
-                         */
-                        
                         uploadFile(drive, path, localFile.name)
 
                         // Get GoogleDriveID of uploaded file and upload time
@@ -137,6 +143,13 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             }
             REQUEST_UPDATE -> {
                 if (resultCode == Activity.RESULT_OK && data != null) {
+                    /*
+                    Overwrite the file existing in GoogleDrive to the local file.
+                    Unlike upload, it also uses id.
+                    Since the id is not changed,
+                    Only the update time is obtained from GoogleDrive.
+                     */
+
                     val drive = setDriveConnect(data, this)
                     val localFile = database.getLocalFile(dbId)
                     val path = applicationContext.filesDir.path + "/" + localFile.fileName
@@ -144,7 +157,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     launch(Dispatchers.Default) {
                         updateFile(drive, path, localFile)
 
-                        // Get GoogleDriveID of uploaded file and upload time
+                        // Get upload time
                         val (_, date) = getFileIdAndDate(drive, localFile)
 
                         // Update database information
