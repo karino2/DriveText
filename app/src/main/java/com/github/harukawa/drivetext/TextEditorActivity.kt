@@ -65,8 +65,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_text_editor)
 
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val EXTENSION = prefs.getString("extension", ".txt")
+        val EXTENSION = ".txt"
 
         dbId = intent.getLongExtra("DB_ID",-1L)
         if(dbId != -1L) {
@@ -214,7 +213,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         listTextView.text = text
 
         titleText.setText(localFile.name)
-        
+
         input.close()
     }
 
