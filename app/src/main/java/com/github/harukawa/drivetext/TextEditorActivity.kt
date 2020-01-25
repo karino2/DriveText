@@ -213,13 +213,8 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         isSave = true
         listTextView.text = text
 
-        if(localFile.fileId != "") {
-            titleText.setText(localFile.name)
-        } else {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-            val EXTENSION = prefs.getString("extension", ".txt")
-            titleText.setText(localFile.name+EXTENSION)
-        }
+        titleText.setText(localFile.name)
+        
         input.close()
     }
 
