@@ -26,10 +26,7 @@ import com.google.api.services.drive.Drive
 import com.google.api.services.drive.DriveScopes
 import io.github.karino2.listtextview.ListTextView
 import kotlinx.android.synthetic.main.activity_text_editor.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import java.io.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -122,7 +119,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     val localFile = database.getLocalFile(dbId)
                     val path = applicationContext.filesDir.path + "/_" + localFile.name
 
-                    launch(Dispatchers.Default) {
+                    launch {
                         uploadFile(drive, path, localFile.name)
 
                         // Get GoogleDriveID of uploaded file and upload time
@@ -153,7 +150,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     val localFile = database.getLocalFile(dbId)
                     val path = applicationContext.filesDir.path + "/" + localFile.fileName
 
-                    launch(Dispatchers.Default) {
+                    launch {
                         updateFile(drive, path, localFile)
 
                         // Get upload time
@@ -244,18 +241,22 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
     suspend fun getFileIdAndDate(googleDriveService: Drive, localFile: LocalFile) : Pair<String, Date> {
         val pageToken : String? = null
-        val result = googleDriveService.files().list().apply {
-            q = "mimeType='text/plain'"
-            spaces = "drive"
-            fields = "nextPageToken, files(id, name, modifiedTime)"
-            this.pageToken = pageToken
-        }.execute()
-        var fileDate : DateTime = DateTime(0)
+        var fileDate: DateTime = DateTime(0)
         var fileId = ""
-        for(file in result.files) {
-            if(localFile.isMatch(file)) {
-                fileId = file.id
-                fileDate = file.modifiedTime
+        withContext(Dispatchers.IO) {
+
+
+            val result = googleDriveService.files().list().apply {
+                q = "mimeType='text/plain'"
+                spaces = "drive"
+                fields = "nextPageToken, files(id, name, modifiedTime)"
+                this.pageToken = pageToken
+            }.execute()
+            for (file in result.files) {
+                if (localFile.isMatch(file)) {
+                    fileId = file.id
+                    fileDate = file.modifiedTime
+                }
             }
         }
         return Pair(fileId, Date(fileDate.value))
@@ -276,15 +277,17 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         targetDriveFile.name = fileName
         if(parentId != "") targetDriveFile.parents = arrayListOf(parentId)
 
-        try {
-            googleDriveService.files().create(targetDriveFile, blobMd)
-                .setFields("id, mimeType, modifiedTime")
-                .execute()
-        }  catch (e: UserRecoverableAuthIOException) {
-            // Only the first time an error appears, so take out the intent and upload it again.
-            Log.d("GoogleSign","Error first Lognin :${e.toString()}")
-            val mIntent = e.intent
-            startActivityForResult(mIntent, REQUEST_UPLOAD)
+        withContext(Dispatchers.IO) {
+            try {
+                googleDriveService.files().create(targetDriveFile, blobMd)
+                    .setFields("id, mimeType, modifiedTime")
+                    .execute()
+            } catch (e: UserRecoverableAuthIOException) {
+                // Only the first time an error appears, so take out the intent and upload it again.
+                Log.d("GoogleSign", "Error first Lognin :${e.toString()}")
+                val mIntent = e.intent
+                startActivityForResult(mIntent, REQUEST_UPLOAD)
+            }
         }
     }
 
@@ -295,14 +298,16 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         val targetDriveFile = DriveFile()
         targetDriveFile.name = localFile.name
 
-        try {
-            googleDriveService.files().update(localFile.fileId, targetDriveFile, blobMd)
-                .execute()
-        } catch (e: UserRecoverableAuthIOException) {
-            // Only the first time an error appears, so take out the intent and upload it again.
-            Log.d("GoogleSign","Error first Login :${e.toString()}")
-            val mIntent = e.intent
-            startActivityForResult(mIntent, REQUEST_UPDATE)
+        withContext(Dispatchers.IO) {
+            try {
+                googleDriveService.files().update(localFile.fileId, targetDriveFile, blobMd)
+                    .execute()
+            } catch (e: UserRecoverableAuthIOException) {
+                // Only the first time an error appears, so take out the intent and upload it again.
+                Log.d("GoogleSign", "Error first Login :${e.toString()}")
+                val mIntent = e.intent
+                startActivityForResult(mIntent, REQUEST_UPDATE)
+            }
         }
     }
 }

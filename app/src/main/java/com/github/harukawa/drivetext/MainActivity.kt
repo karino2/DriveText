@@ -29,6 +29,7 @@ import java.util.*
 import kotlin.coroutines.CoroutineContext
 import android.preference.PreferenceManager
 import androidx.appcompat.app.AlertDialog
+import com.google.api.services.drive.model.FileList
 
 class MainActivity : AppCompatActivity(), CoroutineScope {
     lateinit var job: Job
@@ -222,13 +223,17 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val parentId = prefs.getString("drive_parent_path", "")
 
-        launch(Dispatchers.Default) {
-            val result = googleDriveService.files().list().apply {
-                spaces = "drive"
-                q = "trashed=false and mimeType!='application/vnd.google-apps.folder'"
-                fields = "nextPageToken, files(id, name, modifiedTime, parents)"
-                this.pageToken = pageToken
-            }.execute()
+        launch {
+            var result : FileList = FileList()
+
+            withContext(Dispatchers.IO) {
+                result = googleDriveService.files().list().apply {
+                    spaces = "drive"
+                    q = "trashed=false and mimeType!='application/vnd.google-apps.folder'"
+                    fields = "nextPageToken, files(id, name, modifiedTime, parents)"
+                    this.pageToken = pageToken
+                }.execute()
+            }
             for(file in result.files) {
 
                 // Download only files in the specific folder
@@ -283,13 +288,15 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
 
     suspend fun downLoadFile(googleDriveService: Drive, id : String, name : String) {
 
-        // Download file refers to https://developers.google.com/drive/api/v3/manage-downloads
-        val outputStream: ByteArrayOutputStream = ByteArrayOutputStream()
-        googleDriveService.files().get(id).executeMediaAndDownloadTo(outputStream)
-        openFileOutput(name, Context.MODE_PRIVATE).use{
-            it.write(outputStream.toByteArray())
+        withContext(Dispatchers.IO) {
+            // Download file refers to https://developers.google.com/drive/api/v3/manage-downloads
+            val outputStream: ByteArrayOutputStream = ByteArrayOutputStream()
+            googleDriveService.files().get(id).executeMediaAndDownloadTo(outputStream)
+            openFileOutput(name, Context.MODE_PRIVATE).use {
+                it.write(outputStream.toByteArray())
+            }
+            outputStream.close()
         }
-        outputStream.close()
     }
 
     override fun onStop() {
