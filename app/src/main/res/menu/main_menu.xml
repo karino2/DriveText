@@ -17,8 +17,8 @@
             android:icon="@android:drawable/ic_menu_preferences"
             app:showAsAction="always"/>
     <item
-            android:id="@+id/action_delete_data"
-            android:title="delete"
+            android:id="@+id/action_delete_local_cache"
+            android:title="delete_local_cache"
             android:icon="@android:drawable/ic_menu_delete"
             app:showAsAction="never"/>
 </menu>

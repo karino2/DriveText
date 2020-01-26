@@ -99,7 +99,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
 
             override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
                 when (item.itemId) {
-                    R.id.delete_item -> {
+                    R.id.delete_local_cache_item -> {
                         launch {
                             val newCursor = withContext(Dispatchers.IO) {
                                 deleteLocalFiles(entryAdapter.selectedIds)
@@ -149,7 +149,8 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
             startActivity(intent)
             true
         }
-        R.id.action_delete_data -> {
+        R.id.action_delete_local_cache -> {
+            // Delete all local files and database contents.
             val dialog = AlertDialog.Builder(this)
             dialog.setMessage(R.string.dialog_delete_message)
                 .setPositiveButton(R.string.yes) { _, _ ->
