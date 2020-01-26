@@ -119,7 +119,7 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     val drive = setDriveConnect(data, this)
 
                     // Get local file information to upload
-                    val localFile = database.getLocalFile(dbId).discardId()
+                    val localFile = database.getLocalFile(dbId)
                     val path = applicationContext.filesDir.path + "/_" + localFile.name
 
                     launch(Dispatchers.Default) {
