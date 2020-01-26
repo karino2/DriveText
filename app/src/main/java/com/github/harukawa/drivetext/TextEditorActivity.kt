@@ -31,6 +31,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import java.io.*
+import java.text.SimpleDateFormat
 import java.util.*
 
 typealias DriveFile = com.google.api.services.drive.model.File
@@ -65,15 +66,14 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_text_editor)
 
-        val EXTENSION = ".txt"
-
         dbId = intent.getLongExtra("DB_ID",-1L)
         if(dbId != -1L) {
             isSave = true
             readFile()
         } else {
             listTextView.text = ""
-            titleText.setText("name"+EXTENSION)
+            val tsf = SimpleDateFormat("yyyy-MM-dd-HHmmss")
+            titleText.setText(tsf.format(Date()) + ".txt")
         }
     }
 
