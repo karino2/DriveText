@@ -70,11 +70,10 @@ class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont
                 if(cellId == -1) {
                     // Caution! adapter's back must be textSplitter.textList.
                     adapter.add(content)
-                    adapter.notifyDataSetInvalidated()
                 } else {
                     textSplitter.textList[cellId] = content
-                    adapter.notifyDataSetChanged()
                 }
+                adapter.notifyDataSetChanged()
                 onDatasetChangedListener()
             }
             return true
