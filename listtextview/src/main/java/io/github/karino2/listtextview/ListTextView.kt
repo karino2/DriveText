@@ -80,6 +80,16 @@ class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont
         }
         return false
     }
+    private fun toConsecutiveIds(checkedItemPositions: SparseBooleanArray): List<Int> {
+        return sequence {
+            repeat(checkedItemPositions.size()) {
+                val key = checkedItemPositions.keyAt(it)
+                if(checkedItemPositions.valueAt(it)) {
+                    yield(key)
+                }
+            }
+        }.toList()
+    }
 
     fun createMultiChoiceModeListener(): AbsListView.MultiChoiceModeListener {
         return object : AbsListView.MultiChoiceModeListener {
@@ -89,6 +99,12 @@ class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont
                         val positions = listView.checkedItemPositions.clone()
                         actionMode.finish()
                         deleteItems(positions)
+                        true
+                    }
+                    R.id.merge_item -> {
+                        val positions = toConsecutiveIds(listView.checkedItemPositions.clone())
+                        actionMode.finish()
+                        mergeCellsRegion(positions[0], positions.last())
                         true
                     }
                     R.id.insert_item -> {
@@ -107,11 +123,25 @@ class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont
                 p2: Long,
                 p3: Boolean
             ) {
-                if(listView.checkedItemCount == 1) {
-                    actionMode.menu.findItem(R.id.insert_item).setVisible(true)
-                } else {
-                    actionMode.menu.findItem(R.id.insert_item).setVisible(false)
+                actionMode.menu.findItem(R.id.insert_item).isVisible = (listView.checkedItemCount == 1)
+                actionMode.menu.findItem(R.id.merge_item).isVisible = isCheckedIdConsecutive(listView.checkedItemPositions)
+            }
+
+            private fun isCheckedIdConsecutive(checkedItemPositions: SparseBooleanArray): Boolean {
+                if(checkedItemPositions.size() == 1)
+                    return false
+                var prevId = -1;
+                repeat(checkedItemPositions.size()) {
+                    val key = checkedItemPositions.keyAt(it)
+                    if(checkedItemPositions.valueAt(it)) {
+                        if(prevId == -1 || prevId == key-1) {
+                            prevId = key
+                        } else {
+                            return false
+                        }
+                    }
                 }
+                return true
             }
 
             override fun onCreateActionMode(actionMode: ActionMode, menu: Menu): Boolean {
@@ -125,6 +155,21 @@ class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont
             }
 
         }
+    }
+
+    private fun mergeCellsRegion(begin:Int, end:Int) {
+        with(textSplitter.textList) {
+            val merged = subList(begin, end+1).joinToString("\n\n")
+            this[begin] = merged
+
+            repeat(end-begin) {
+                this.removeAt(begin+1)
+            }
+        }
+        adapter.notifyDataSetChanged()
+
+        // merge does not change underling text file.
+        // onDatasetChangedListener()
     }
 
     private fun insertItemAt(insertAt: Int) {
