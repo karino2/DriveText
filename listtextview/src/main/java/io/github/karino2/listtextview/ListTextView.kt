@@ -7,9 +7,7 @@ import android.os.Parcel
 import android.os.Parcelable
 import android.util.AttributeSet
 import android.util.SparseBooleanArray
-import android.view.ActionMode
-import android.view.Menu
-import android.view.MenuItem
+import android.view.*
 import android.widget.*
 
 class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont, attrs) {
@@ -39,6 +37,38 @@ class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont
         findViewById<Button>(R.id.buttonNew).setOnClickListener {
             startEditCellActivityForResult(-1, "")
         }
+
+        listView.setOnKeyListener(object: View.OnKeyListener {
+            override fun onKey(view: View?, keyCode: Int, keyEvent: KeyEvent): Boolean {
+                if(keyEvent.action != KeyEvent.ACTION_UP)
+                    return false
+
+                val id = listView.selectedItemId.toInt()
+                if(id == -1)
+                    return false
+
+                when (keyCode) {
+                    KeyEvent.KEYCODE_A -> {
+                        insertItemAt(id)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_B -> {
+                        insertItemAt(id+1)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_M -> {
+                        if((keyEvent.modifiers and KeyEvent.META_SHIFT_ON) != 0) {
+                            if(id != adapter.count-1) {
+                                mergeCellsRegion(id, id+1)
+                                return true
+                            }
+                        }
+                        return false
+                    }
+                    else -> return false
+                }
+            }
+        })
     }
 
 
