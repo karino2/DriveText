@@ -7,9 +7,7 @@ import android.os.Parcel
 import android.os.Parcelable
 import android.util.AttributeSet
 import android.util.SparseBooleanArray
-import android.view.ActionMode
-import android.view.Menu
-import android.view.MenuItem
+import android.view.*
 import android.widget.*
 
 class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont, attrs) {
@@ -39,6 +37,38 @@ class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont
         findViewById<Button>(R.id.buttonNew).setOnClickListener {
             startEditCellActivityForResult(-1, "")
         }
+
+        listView.setOnKeyListener(object: View.OnKeyListener {
+            override fun onKey(view: View?, keyCode: Int, keyEvent: KeyEvent): Boolean {
+                if(keyEvent.action != KeyEvent.ACTION_UP)
+                    return false
+
+                val id = listView.selectedItemId.toInt()
+                if(id == -1)
+                    return false
+
+                when (keyCode) {
+                    KeyEvent.KEYCODE_A -> {
+                        insertItemAt(id)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_B -> {
+                        insertItemAt(id+1)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_M -> {
+                        if((keyEvent.modifiers and KeyEvent.META_SHIFT_ON) != 0) {
+                            if(id != adapter.count-1) {
+                                mergeCellsRegion(id, id+1)
+                                return true
+                            }
+                        }
+                        return false
+                    }
+                    else -> return false
+                }
+            }
+        })
     }
 
 
@@ -70,16 +100,25 @@ class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont
                 if(cellId == -1) {
                     // Caution! adapter's back must be textSplitter.textList.
                     adapter.add(content)
-                    adapter.notifyDataSetInvalidated()
                 } else {
                     textSplitter.textList[cellId] = content
-                    adapter.notifyDataSetChanged()
                 }
+                adapter.notifyDataSetChanged()
                 onDatasetChangedListener()
             }
             return true
         }
         return false
+    }
+    private fun toConsecutiveIds(checkedItemPositions: SparseBooleanArray): List<Int> {
+        return sequence {
+            repeat(checkedItemPositions.size()) {
+                val key = checkedItemPositions.keyAt(it)
+                if(checkedItemPositions.valueAt(it)) {
+                    yield(key)
+                }
+            }
+        }.toList()
     }
 
     fun createMultiChoiceModeListener(): AbsListView.MultiChoiceModeListener {
@@ -90,6 +129,12 @@ class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont
                         val positions = listView.checkedItemPositions.clone()
                         actionMode.finish()
                         deleteItems(positions)
+                        true
+                    }
+                    R.id.merge_item -> {
+                        val positions = toConsecutiveIds(listView.checkedItemPositions.clone())
+                        actionMode.finish()
+                        mergeCellsRegion(positions[0], positions.last())
                         true
                     }
                     R.id.insert_item -> {
@@ -108,11 +153,25 @@ class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont
                 p2: Long,
                 p3: Boolean
             ) {
-                if(listView.checkedItemCount == 1) {
-                    actionMode.menu.findItem(R.id.insert_item).setVisible(true)
-                } else {
-                    actionMode.menu.findItem(R.id.insert_item).setVisible(false)
+                actionMode.menu.findItem(R.id.insert_item).isVisible = (listView.checkedItemCount == 1)
+                actionMode.menu.findItem(R.id.merge_item).isVisible = isCheckedIdConsecutive(listView.checkedItemPositions)
+            }
+
+            private fun isCheckedIdConsecutive(checkedItemPositions: SparseBooleanArray): Boolean {
+                if(checkedItemPositions.size() == 1)
+                    return false
+                var prevId = -1;
+                repeat(checkedItemPositions.size()) {
+                    val key = checkedItemPositions.keyAt(it)
+                    if(checkedItemPositions.valueAt(it)) {
+                        if(prevId == -1 || prevId == key-1) {
+                            prevId = key
+                        } else {
+                            return false
+                        }
+                    }
                 }
+                return true
             }
 
             override fun onCreateActionMode(actionMode: ActionMode, menu: Menu): Boolean {
@@ -126,6 +185,21 @@ class ListTextView(val cont: Context, attrs: AttributeSet) : RelativeLayout(cont
             }
 
         }
+    }
+
+    private fun mergeCellsRegion(begin:Int, end:Int) {
+        with(textSplitter.textList) {
+            val merged = subList(begin, end+1).joinToString("\n\n")
+            this[begin] = merged
+
+            repeat(end-begin) {
+                this.removeAt(begin+1)
+            }
+        }
+        adapter.notifyDataSetChanged()
+
+        // merge does not change underling text file.
+        // onDatasetChangedListener()
     }
 
     private fun insertItemAt(insertAt: Int) {

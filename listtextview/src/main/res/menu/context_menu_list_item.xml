@@ -4,5 +4,6 @@
             android:icon="@android:drawable/ic_delete"
             />
     <item android:title="insert" android:id="@+id/insert_item" />
+    <item android:title="merge" android:id="@+id/merge_item" />
 
 </menu>
