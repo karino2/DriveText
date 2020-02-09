@@ -224,17 +224,25 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         val parentId = prefs.getString("drive_parent_path", "")
 
         launch {
-            var result : FileList = FileList()
+            val result = ArrayList<com.google.api.services.drive.model.File>()
 
             withContext(Dispatchers.IO) {
-                result = googleDriveService.files().list().apply {
+                // https://developers.google.com/drive/api/v2/reference/files/list
+                var request = googleDriveService.files().list().apply {
                     spaces = "drive"
-                    q = "trashed=false and mimeType!='application/vnd.google-apps.folder'"
+                    q = "'${parentId}' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'"
                     fields = "nextPageToken, files(id, name, modifiedTime, parents)"
                     this.pageToken = pageToken
-                }.execute()
+                }
+
+                do {
+                    val files = request.execute()
+                    result.addAll(files.files)
+                    request.pageToken = files.nextPageToken
+                }while(request.pageToken != null && request.pageToken.isNotEmpty())
             }
-            for(file in result.files) {
+
+            for(file in result) {
 
                 // Download only files in the specific folder
                 val parents = file.parents ?: mutableListOf()
