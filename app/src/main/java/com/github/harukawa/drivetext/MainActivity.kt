@@ -10,7 +10,6 @@ import android.os.Bundle
 import android.util.Log
 import android.view.*
 import android.widget.TextView
-import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -20,7 +19,6 @@ import com.google.android.gms.common.api.Scope
 import com.google.api.client.extensions.android.http.AndroidHttp
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.json.jackson2.JacksonFactory
-import com.google.api.client.util.DateTime
 import com.google.api.services.drive.Drive
 import com.google.api.services.drive.DriveScopes
 import kotlinx.coroutines.*
@@ -29,6 +27,7 @@ import java.util.*
 import kotlin.coroutines.CoroutineContext
 import android.preference.PreferenceManager
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.widget.Toolbar
 import com.google.api.services.drive.model.FileList
 
 class MainActivity : AppCompatActivity(), CoroutineScope {
@@ -75,11 +74,21 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        setSupportActionBar(findViewById(R.id.toolbar))
+
         recyclerView.adapter = entryAdapter
 
         recyclerView.setHasFixedSize(true)
         recyclerView.layoutManager = LinearLayoutManager(this)
         setupActionMode()
+    }
+
+    fun showCommunicationIndicator() {
+        findViewById<View>(R.id.progressBar).visibility = View.VISIBLE
+    }
+
+    fun hideCommunicationIndicator() {
+        findViewById<View>(R.id.progressBar).visibility = View.GONE
     }
 
     fun deleteLocalFiles(ids: List<Long>) {
@@ -223,6 +232,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val parentId = prefs.getString("drive_parent_path", "")
 
+        showCommunicationIndicator()
         launch {
             var result : FileList = FileList()
 
@@ -271,6 +281,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
             val query =  queryCursor()
             withContext(Dispatchers.Main) {
                 entryAdapter.swapCursor(query)
+                hideCommunicationIndicator()
             }
         }
     }
