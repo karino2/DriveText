@@ -254,14 +254,6 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
 
             for(file in result) {
 
-                // Download only files in the specific folder
-                val parents = file.parents ?: mutableListOf()
-                var isParents = false
-                for(par in parents){
-                    if(par == parentId) isParents = true
-                }
-                if(!isParents) continue
-
                 isUpdate = false
                 isDownload = false
 
