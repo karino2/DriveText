@@ -133,6 +133,12 @@ fun DatabaseHolder.updateDriveEntry(id: Long, localFile: LocalFile, driveDate: D
     database.update(DatabaseHolder.ENTRY_TABLE_NAME, values, "_id=?", arrayOf(id.toString()))
 }
 
+fun DatabaseHolder.deleteDriveIdEntry(id: Long) {
+    val values = ContentValues()
+    values.put("FILE_ID",  "")
+    database.update(DatabaseHolder.ENTRY_TABLE_NAME, values, "_id=?", arrayOf(id.toString()))
+}
+
 fun DatabaseHolder.deleteEntries(ids: List<Long>) {
     ids.forEach {
         database.delete(DatabaseHolder.ENTRY_TABLE_NAME, "_id=?", arrayOf(it.toString()))
@@ -171,20 +177,7 @@ fun DatabaseHolder.getData(driveId : String): Pair<String, Long> {
             Pair("", 0L)
         } else {
             // FILE_NAME, DRIVE_FILE_DATE
-            Pair(this.getString(1), this.getLong(4))
-        }
-    }
-}
-
-fun DatabaseHolder.getDbDate(id: Long): Long{
-    return query(DatabaseHolder.ENTRY_TABLE_NAME) {
-        where("_id=?", id.toString())
-    }.withClose{
-        moveToFirst()
-        if(isAfterLast) {
-            0L
-        } else {
-            this.getLong(4)
+            Pair(this.getString(1), this.getLong(3))
         }
     }
 }
@@ -213,4 +206,60 @@ fun DatabaseHolder.getId(fileName: String, fileId: String): Long {
             this.getLong(0)
         }
     }
+}
+
+fun DatabaseHolder.getDbId(driveId: String): Long {
+    return query(DatabaseHolder.ENTRY_TABLE_NAME) {
+        where("FILE_ID=?",driveId)
+    }.withClose{
+        moveToFirst()
+        if(isAfterLast){
+            -1
+        } else {
+            this.getLong(0)
+        }
+    }
+}
+
+fun DatabaseHolder.getLocalAndDriveData(driveId : String): Pair<Long, Long> {
+    return query(DatabaseHolder.ENTRY_TABLE_NAME) {
+        where("FILE_ID=?",driveId)
+    }.withClose{
+        moveToFirst()
+        if(isAfterLast){
+            Pair(0L, 0L)
+        } else {
+            // Local_FILE_DATE, DRIVE_FILE_DATE
+            Pair(this.getLong(3), this.getLong(4))
+        }
+    }
+}
+
+fun DatabaseHolder.getFileDataList(): List<Pair<String,String>> {
+    var  fileList :MutableList<Pair<String,String>>  = mutableListOf();
+    query(DatabaseHolder.ENTRY_TABLE_NAME) {
+    }.withClose{
+        moveToFirst()
+        while(isAfterLast) {
+            fileList.add(Pair(this.getString(1), this.getString(2)))
+            moveToNext()
+        }
+        /*if(isAfterLast){
+            Pair(0L, 0L)
+        } else {
+            // FILE_NAME, FILE_ID
+            fileList.add(Pair(this.getString(1), this.getString(2)))
+        }
+        moveToNext()*/
+    }
+
+    query(DatabaseHolder.ENTRY_TABLE_NAME){}.withClose {
+        moveToFirst()
+        while(!isAfterLast) {
+            fileList.add(Pair(this.getString(1), this.getString(2)))
+            moveToNext()
+        }
+    }
+
+    return fileList
 }

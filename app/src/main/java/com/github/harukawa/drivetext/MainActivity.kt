@@ -28,6 +28,7 @@ import kotlin.coroutines.CoroutineContext
 import android.preference.PreferenceManager
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.Toolbar
+import com.github.harukawa.drivetext.MainActivity.Companion.REQUEST_REDO
 import com.google.api.services.drive.model.FileList
 
 class MainActivity : AppCompatActivity(), CoroutineScope {
@@ -42,12 +43,18 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
     private val TAG = "MainActivity"
 
     companion object {
-        private const val REQUEST_GET_DATA = 0
+        const val REQUEST_GET_DATA = 0
+        const val REQUEST_REDO = 1
+        var intent : Intent = Intent()
     }
 
     val entryAdapter = EntryAdapter(this)
 
+    //val sync  by lazy {Sync(this, this@MainActivity)}
+
     val database by lazy { DatabaseHolder(this) }
+    val cmdTable by lazy { CommandTableHolder(this)}
+
     val SELECT_FIELDS = arrayOf("_id", "FILE_NAME")
     val ORDER_SENTENCE = "_id DESC"
 
@@ -81,6 +88,17 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         recyclerView.setHasFixedSize(true)
         recyclerView.layoutManager = LinearLayoutManager(this)
         setupActionMode()
+
+        val flag = intent.getBooleanExtra("Drive", false)
+        if(flag) {
+            Log.d(TAG, "Google Sign back MainActivity")
+            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestScopes(Scope(DriveScopes.DRIVE)).requestEmail()
+                .build()
+
+            val client = GoogleSignIn.getClient(this, gso)
+            startActivityForResult(client.signInIntent, REQUEST_GET_DATA)
+        }
     }
 
     fun showCommunicationIndicator() {
@@ -114,6 +132,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
                             val newCursor = withContext(Dispatchers.IO) {
                                 deleteLocalFiles(entryAdapter.selectedIds)
                                 database.deleteEntries(entryAdapter.selectedIds)
+
                                 queryCursor()
                             }
                             entryAdapter.swapCursor(newCursor)
@@ -165,6 +184,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
             dialog.setMessage(R.string.dialog_delete_message)
                 .setPositiveButton(R.string.yes) { _, _ ->
                     database.deleteAll()
+                    cmdTable.deleteAll()
                     this.filesDir.deleteRecursively()
                     val query =  queryCursor()
                     entryAdapter.swapCursor(query)
@@ -182,32 +202,33 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         }
     }
 
-    fun setDriveConnect(data: Intent): Drive {
-        val task = GoogleSignIn.getSignedInAccountFromIntent(data)
-        val googleAccount : GoogleSignInAccount = task.result!!
-        // Use the authenticated account to sign in to the Drive service.
-        val credential : GoogleAccountCredential = GoogleAccountCredential.usingOAuth2(
-            this, listOf(DriveScopes.DRIVE)
-        )
-        credential.selectedAccount = googleAccount.account
-        val googleDriveService = Drive.Builder(
-            AndroidHttp.newCompatibleTransport(),
-            JacksonFactory.getDefaultInstance(),
-            credential)
-            .setApplicationName(getString(R.string.app_name))
-            .build()
-        return googleDriveService
-    }
-
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         when(requestCode) {
             REQUEST_GET_DATA -> {
                 //https://developers.google.com/api-client-library/java/google-api-java-client/media-upload
                 if (resultCode == Activity.RESULT_OK && data != null) {
-                    val drive = setDriveConnect(data)
-                    updateFileAndDb(drive)
+                    MainActivity.intent = data
+                    Intent(this, SyncService::class.java).also { intent ->
+                        startService(intent)
+                    }
+                    launch {
+
+                        val query = queryCursor()
+                        withContext(Dispatchers.Main) {
+                            entryAdapter.swapCursor(query)
+                            hideCommunicationIndicator()
+                        }
+                    }
                 } else {
                     Log.d("failure connect","faile upload file")
+                }
+            }
+            REQUEST_REDO -> {
+                if (resultCode == Activity.RESULT_OK && data != null) {
+                    MainActivity.intent = data
+                    Intent(this, SyncService::class.java).also { intent ->
+                        startService(intent)
+                    }
                 }
             }
         }
@@ -216,97 +237,17 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
     }
 
     fun updateFile() {
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestScopes(Scope(DriveScopes.DRIVE)).requestEmail()
-            .build()
-
-        val client = GoogleSignIn.getClient(this, gso)
-        startActivityForResult(client.signInIntent, REQUEST_GET_DATA)
-    }
-
-
-    // After rewrite to DriveConnecter
-    fun updateFileAndDb(googleDriveService: Drive) {
-        var isUpdate = false
-        var isDownload = false
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val parentId = prefs.getString("drive_parent_path", "")
 
+        val q =
+            "'${parentId}' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'"
+        val spaces = "drive"
+        val fields = "nextPageToken, files(id, name, modifiedTime, parents)"
+        cmdTable.insertGetDriveInfo(q, spaces, fields)
         showCommunicationIndicator()
-        launch {
-            val result = ArrayList<com.google.api.services.drive.model.File>()
-
-            withContext(Dispatchers.IO) {
-                // https://developers.google.com/drive/api/v2/reference/files/list
-                var request = googleDriveService.files().list().apply {
-                    spaces = "drive"
-                    q = "'${parentId}' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'"
-                    fields = "nextPageToken, files(id, name, modifiedTime, parents)"
-                    this.pageToken = pageToken
-                }
-
-                do {
-                    val files = request.execute()
-                    result.addAll(files.files)
-                    request.pageToken = files.nextPageToken
-                }while(request.pageToken != null && request.pageToken.isNotEmpty())
-            }
-
-            for(file in result) {
-
-                isUpdate = false
-                isDownload = false
-
-                val (db_name, _) = database.getData(file.id)
-                if(db_name == "") isDownload = true
-                if(!isDownload) {
-                    isUpdate = checkData(file.id, Date(file.modifiedTime.value))
-                }
-                if(isUpdate || isDownload) {
-                    // Get file data from drive
-                    val driveName = file.name
-                    val fileName = file.id + "_" + driveName
-                    downLoadFile(googleDriveService, file.id.toString(), fileName)
-
-                    if(isUpdate) {
-                        val dbId = database.getId(file.name, file.id)
-                        database.updateEntry(dbId, driveName, Date(), Date(file.modifiedTime.value))
-                    }
-                    if(isDownload) {
-                        database.insertEntry(driveName, file.id, Date(), Date(file.modifiedTime.value))
-                    }
-                }
-            }
-            // finish download and update
-            val query =  queryCursor()
-            withContext(Dispatchers.Main) {
-                entryAdapter.swapCursor(query)
-                hideCommunicationIndicator()
-            }
-        }
-    }
-
-    fun checkData(id: String, driveDate : Date) : Boolean {
-        val (_, date) = database.getData(id)
-        val dbDate = Date(date)
-        // When the update time of drive is the latest
-        if(driveDate.compareTo(dbDate) == 1) {
-            return true
-        } else {
-            return false
-        }
-    }
-
-    suspend fun downLoadFile(googleDriveService: Drive, id : String, name : String) {
-
-        withContext(Dispatchers.IO) {
-            // Download file refers to https://developers.google.com/drive/api/v3/manage-downloads
-            val outputStream: ByteArrayOutputStream = ByteArrayOutputStream()
-            googleDriveService.files().get(id).executeMediaAndDownloadTo(outputStream)
-            openFileOutput(name, Context.MODE_PRIVATE).use {
-                it.write(outputStream.toByteArray())
-            }
-            outputStream.close()
+        Intent(this, SyncService::class.java).also { intent ->
+            startService(intent)
         }
     }
 
@@ -318,6 +259,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
     override fun onDestroy() {
         entryAdapter.swapCursor(null)
         database.close()
+        cmdTable.close()
         super.onDestroy()
     }
 
