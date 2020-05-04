@@ -1,55 +1,27 @@
 package com.github.harukawa.drivetext
 
-import android.app.Activity
 import android.app.IntentService
 import android.content.Context
 import android.content.Intent
-import android.os.Binder
-import android.os.IBinder
 import android.preference.PreferenceManager
 import android.util.Log
-import androidx.core.app.ActivityCompat.startActivityForResult
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.Scopes
-import com.google.android.gms.common.api.Scope
-import com.google.api.client.extensions.android.http.AndroidHttp
-import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.googleapis.extensions.android.gms.auth.UserRecoverableAuthIOException
 import com.google.api.client.http.FileContent
-import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.client.util.DateTime
 import com.google.api.services.drive.Drive
-import com.google.api.services.drive.DriveScopes
 import com.google.api.services.drive.model.File
 import com.google.api.services.drive.model.FileList
 import kotlinx.coroutines.*
 import java.io.ByteArrayOutputStream
 import java.util.*
-import kotlin.coroutines.CoroutineContext
 
 class SyncService : IntentService("Sync"), CoroutineScope by MainScope() {
 
-    lateinit var job: Job
+    private val TAG = "SyncService"
 
-    // Binder given to clients
-    private val binder = LocalBinder()
+    private var isNotLastTimeSync = false
 
-    inner class LocalBinder : Binder() {
-        // Return this instance of LocalService so clients can call public methods
-        fun getService() = this@SyncService
-    }
-
-    override fun onHandleIntent(intent: Intent?) {
-        launch{
-            run()
-        }
-    }
-
-    override fun onBind(intent: Intent): IBinder {
-        return binder
-    }
+    lateinit var googleDriveService: Drive
 
     var isComplete = false
 
@@ -58,6 +30,19 @@ class SyncService : IntentService("Sync"), CoroutineScope by MainScope() {
     val parentId by lazy {
         PreferenceManager.getDefaultSharedPreferences(this)
             .getString("drive_parent_path", "")
+    }
+
+    override fun onHandleIntent(intent: Intent?) {
+        isComplete = false
+        googleDriveService = MainActivity.googleDriveService
+        isNotLastTimeSync = false
+        launch{
+            run()
+            isComplete = true
+            val broadcastIntent = Intent()
+            broadcastIntent.action = "FINISH_SYNC"
+            baseContext.sendBroadcast(broadcastIntent)
+        }
     }
 
     fun setUpload(fileName: String, filePath: String) {
@@ -72,55 +57,62 @@ class SyncService : IntentService("Sync"), CoroutineScope by MainScope() {
         cmdTable.insertDownload(id, fileName)
     }
 
-    fun setSync(q : String, spaces : String, fields : String) {
-        cmdTable.insertGetDriveInfo(q, spaces, fields)
-    }
-
     fun setGetFileInfo(comPar: CommunicationParameters) {
         cmdTable.insertGetFileInfo(comPar)
     }
 
-
-
     suspend fun run() {
         try {
-            val googleDriveService = setDriveConnect(MainActivity.intent, this)
-
             var res = cmdTable.getPendingList()
+            var q = ""
+            var spaces = ""
+            var fields = ""
 
             while(res.isNotEmpty()) {
                 var current = res.get(0)
 
 
-                Log.d("Sync", "succces ${current.cmd}")
+                Log.d(TAG, "Run Command ${current.cmd}")
                 when (current.cmd) {
                     CommandTableHolder.CMD_ID_SYNC_UPLOAD -> {
                         val (fileName, filePath) = cmdTable.getUploadInfo(current.id)
-                        uploadFile(googleDriveService, filePath, fileName)
+                        uploadFile(filePath, fileName)
                         cmdTable.deleteEntries(current.id)
                     }
                     CommandTableHolder.CMD_ID_SYNC_UPDATE -> {
                         val (id, fileName, filePath) = cmdTable.getUpdateInfo(current.id)
                         val dbId = database.getId(fileName, id)
                         val localFile = database.getLocalFile(dbId)
-                        updateFile(googleDriveService, filePath,localFile)
+                        updateFile(filePath,localFile)
                         cmdTable.deleteEntries(current.id)
 
                     }
                     CommandTableHolder.CMD_ID_SYNC_DOWNLOAD -> {
                         val (id, fileName) = cmdTable.getDownloadInfo(current.id)
-                        downLoadFile(googleDriveService, id, fileName)
+                        downLoadFile(id, fileName)
                         cmdTable.deleteEntries(current.id)
 
                     }
                     CommandTableHolder.CMD_ID_SYNC_DRIVE_INFO -> {
-                        val (q, spaces, mimeType) = cmdTable.getDriveInfo(current.id)
-                        startSync(googleDriveService, q, spaces, mimeType)
+                        /*
+                        If the command for the previous synchronization is listed,
+                        execute the previous command and then perform synchronization.
+                         */
+                        if(cmdTable.getPendingList().count() > 1){
+                            isNotLastTimeSync = true
+                            val (_q, _spaces, _fields) = cmdTable.getDriveInfo(current.id)
+                            q = _q
+                            spaces = _spaces
+                            fields = _fields
+                        } else {
+                            val (q, spaces, fields) = cmdTable.getDriveInfo(current.id)
+                            startSync(q, spaces, fields)
+                        }
                         cmdTable.deleteEntries(current.id)
                     }
                     CommandTableHolder.CMD_ID_SYNC_DRIVE_FILE_INFO -> {
                         val comPar = cmdTable.getDriveFileInfo(current.id)
-                        registFileData(googleDriveService, comPar)
+                        registFileData(comPar)
                         cmdTable.deleteEntries(current.id)
                     }
                     else -> {
@@ -128,32 +120,39 @@ class SyncService : IntentService("Sync"), CoroutineScope by MainScope() {
                     }
                 }
                 res = cmdTable.getPendingList()
+                if(res.isEmpty() and isNotLastTimeSync){
+                    isNotLastTimeSync = false
+                    cmdTable.insertGetDriveInfo(q, spaces, fields)
+                }
             }
         }catch (e: Exception){
-            val intent = Intent(this,MainActivity::class.java)
-            intent.putExtra("Drive",true)
-            startActivity(intent)
+            Log.d(TAG, "Error run ${e.stackTrace}, ${e.message}, ${e.cause}")
         }
-
-
     }
 
-    suspend fun startSync(googleDriveService: Drive, param_q:String, param_spaces: String, param_fields: String) {
+    suspend fun startSync(param_q:String, param_spaces: String, param_fields: String) {
         val result = ArrayList<File>()
         withContext(Dispatchers.IO) {
             // https://developers.google.com/drive/api/v2/reference/files/list
-            var request = googleDriveService.files().list().apply {
-                spaces = param_spaces
-                q = param_q
-                fields = param_fields
-                this.pageToken = pageToken
-            }
+            try {
+                var request = googleDriveService.files().list().apply {
+                    spaces = param_spaces
+                    q = param_q
+                    fields = param_fields
+                    this.pageToken = pageToken
+                }
 
-            do {
-                val files = request.execute()
-                result.addAll(files.files)
-                request.pageToken = files.nextPageToken
-            }while(request.pageToken != null && request.pageToken.isNotEmpty())
+                do {
+                    val files = request.execute()
+                    result.addAll(files.files)
+                    request.pageToken = files.nextPageToken
+                } while (request.pageToken != null && request.pageToken.isNotEmpty())
+            } catch (e: UserRecoverableAuthIOException) {
+                // Only the first time an error appears, so take out the intent and upload it again.
+                Log.d("GoogleSign", "Error first Lognin :${e.toString()}")
+            } catch(e: Exception) {
+                Log.d(TAG, "Error Connect Drive" + e)
+            }
         }
 
         var isUpdate : Boolean
@@ -215,6 +214,7 @@ class SyncService : IntentService("Sync"), CoroutineScope by MainScope() {
             Log.d("SYNCData", "FILE Name:${file.name} id:${file.id}, isConflict:${isConflict.toString()} " +
                     "isDownload:${isDownload.toString()} isUpdate:${isUpdate} isChangeName:${isChangeName.toString()}" +
                     " isExistLocal:${isExistLocal.toString()} isSameName:${isSameName.toString()}")
+
             var driveFileName = ""
             val dbId = database.getId(db_name, file.id)
             if(isConflict) {
@@ -282,7 +282,7 @@ class SyncService : IntentService("Sync"), CoroutineScope by MainScope() {
         return driveDate.compareTo(dbDate)
     }
 
-    suspend fun registFileData(googleDriveService: Drive, comPar : CommunicationParameters) {
+    suspend fun registFileData(comPar : CommunicationParameters) {
         val localFile = LocalFile(comPar.fileName, "", 0L)
         var fileDate: DateTime = DateTime(0)
         var fileId = if(comPar.driveId != "") comPar.driveId else ""
@@ -290,12 +290,20 @@ class SyncService : IntentService("Sync"), CoroutineScope by MainScope() {
         var result = FileList()
 
         withContext(Dispatchers.IO) {
-            result = googleDriveService.files().list().apply {
-                q = "mimeType='text/plain'"
-                spaces = "drive"
-                fields = "nextPageToken, files(id, name, modifiedTime)"
-                this.pageToken = pageToken
-            }.execute()
+            try {
+                result = googleDriveService.files().list().apply {
+                    q = "mimeType='text/plain'"
+                    spaces = "drive"
+                    fields = "nextPageToken, files(id, name, modifiedTime)"
+                    this.pageToken = pageToken
+                }.execute()
+            } catch (e: UserRecoverableAuthIOException) {
+                // Only the first time an error appears, so take out the intent and upload it again.
+                Log.d("GoogleSign", "Error first Lognin :${e.toString()}")
+
+            } catch (e : Exception) {
+                Log.d(TAG, "Error Connect Drive " + e)
+            }
         }
 
         for (file in result.files) {
@@ -314,16 +322,27 @@ class SyncService : IntentService("Sync"), CoroutineScope by MainScope() {
         }
     }
 
-    suspend fun downLoadFile(googleDriveService: Drive, id : String, name : String) {
-
+    suspend fun downLoadFile(id : String, name : String) {
+        Log.d(TAG, "start downLoadFile")
+        Log.d(TAG, "id: ${id}")
+        Log.d(TAG, "name : ${name}")
         withContext(Dispatchers.IO) {
-            // Download file refers to https://developers.google.com/drive/api/v3/manage-downloads
-            val outputStream: ByteArrayOutputStream = ByteArrayOutputStream()
-            googleDriveService.files().get(id).executeMediaAndDownloadTo(outputStream)
-            this@SyncService.openFileOutput("_" + name, Context.MODE_PRIVATE).use {
-                it.write(outputStream.toByteArray())
+            try {
+                // Download file refers to https://developers.google.com/drive/api/v3/manage-downloads
+                val outputStream: ByteArrayOutputStream = ByteArrayOutputStream()
+                googleDriveService.files().get(id).executeMediaAndDownloadTo(outputStream)
+                Log.d(TAG, "end googleDriveService.files().get(id)")
+                this@SyncService.openFileOutput("_" + name, Context.MODE_PRIVATE).use {
+                    it.write(outputStream.toByteArray())
+                }
+                Log.d(TAG, "end openFileOutput")
+                outputStream.close()
+            } catch (e: UserRecoverableAuthIOException) {
+                // Only the first time an error appears, so take out the intent and upload it again.
+                Log.d("GoogleSign", "Error first Lognin :${e.toString()}")
+            } catch (e : Exception) {
+                Log.d(TAG, "Error Connect Drive " + e)
             }
-            outputStream.close()
         }
 
         val comPar = CommunicationParameters(id, name,"",
@@ -333,7 +352,7 @@ class SyncService : IntentService("Sync"), CoroutineScope by MainScope() {
     }
 
 
-    suspend fun uploadFile(googleDriveService: Drive, filePath : String, fileName: String) {
+    suspend fun uploadFile(filePath : String, fileName: String) {
         // Uploading file refers to https://developers.google.com/drive/api/v3/manage-uploads
         // To make FileContent with file's URI, the pdf file is saved as a temp file.
 
@@ -366,8 +385,8 @@ class SyncService : IntentService("Sync"), CoroutineScope by MainScope() {
             } catch (e: UserRecoverableAuthIOException) {
                 // Only the first time an error appears, so take out the intent and upload it again.
                 Log.d("GoogleSign", "Error first Lognin :${e.toString()}")
-                val mIntent = e.intent
-                //mActivity.startActivityForResult(mIntent, MainActivity.REQUEST_REDO)
+            } catch (e : Exception) {
+                Log.d(TAG, "Error Connect Drive " + e)
             }
         }
 
@@ -376,7 +395,7 @@ class SyncService : IntentService("Sync"), CoroutineScope by MainScope() {
         setGetFileInfo(comPar)
     }
 
-    suspend fun updateFile(googleDriveService: Drive, filePath: String, localFile: LocalFile) {
+    suspend fun updateFile(filePath: String, localFile: LocalFile) {
         // Uploading file refers to https://developers.google.com/drive/api/v3/manage-uploads
         // Update file settings.
 
@@ -397,8 +416,8 @@ class SyncService : IntentService("Sync"), CoroutineScope by MainScope() {
             } catch (e: UserRecoverableAuthIOException) {
                 // Only the first time an error appears, so take out the intent and upload it again.
                 Log.d("GoogleSign", "Error first Login :${e.toString()}")
-                val mIntent = e.intent
-                //mActivity.startActivityForResult(mIntent, MainActivity.REQUEST_REDO)
+            } catch (e : Exception) {
+                Log.d(TAG, "Error Connect Drive " + e)
             }
         }
 
@@ -406,23 +425,6 @@ class SyncService : IntentService("Sync"), CoroutineScope by MainScope() {
             "mimeType='text/plain'", "drive",
             "","nextPageToken, files(id, name, modifiedTime)")
         setGetFileInfo(comPar)
-    }
-
-    fun setDriveConnect(data: Intent, context: Context): Drive {
-        val task = GoogleSignIn.getSignedInAccountFromIntent(data)
-
-        val googleAccount : GoogleSignInAccount = task.result!!
-        val credential : GoogleAccountCredential = GoogleAccountCredential.usingOAuth2(
-            context, listOf(DriveScopes.DRIVE_FILE, Scopes.DRIVE_APPFOLDER)
-        )
-        credential.selectedAccount = googleAccount.account
-        val googleDriveService = Drive.Builder(
-            AndroidHttp.newCompatibleTransport(),
-            JacksonFactory.getDefaultInstance(),
-            credential)
-            .setApplicationName(context.getString(R.string.app_name))
-            .build()
-        return googleDriveService
     }
 
     fun renameFile(old : String, new: String) {

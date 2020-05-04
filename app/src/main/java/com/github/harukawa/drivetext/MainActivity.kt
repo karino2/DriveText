@@ -1,8 +1,7 @@
 package com.github.harukawa.drivetext
 
 import android.app.Activity
-import android.content.Context
-import android.content.Intent
+import android.content.*
 import android.database.Cursor
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.view.ActionMode
@@ -22,14 +21,11 @@ import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.services.drive.Drive
 import com.google.api.services.drive.DriveScopes
 import kotlinx.coroutines.*
-import java.io.ByteArrayOutputStream
-import java.util.*
 import kotlin.coroutines.CoroutineContext
 import android.preference.PreferenceManager
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.widget.Toolbar
-import com.github.harukawa.drivetext.MainActivity.Companion.REQUEST_REDO
-import com.google.api.services.drive.model.FileList
+import com.google.android.gms.common.Scopes
+import com.google.api.client.googleapis.extensions.android.gms.auth.UserRecoverableAuthIOException
 
 class MainActivity : AppCompatActivity(), CoroutineScope {
     lateinit var job: Job
@@ -45,12 +41,10 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
     companion object {
         const val REQUEST_GET_DATA = 0
         const val REQUEST_REDO = 1
-        var intent : Intent = Intent()
+        lateinit var googleDriveService: Drive
     }
 
     val entryAdapter = EntryAdapter(this)
-
-    //val sync  by lazy {Sync(this, this@MainActivity)}
 
     val database by lazy { DatabaseHolder(this) }
     val cmdTable by lazy { CommandTableHolder(this)}
@@ -58,7 +52,15 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
     val SELECT_FIELDS = arrayOf("_id", "FILE_NAME")
     val ORDER_SENTENCE = "_id DESC"
 
-    private fun queryCursor(): Cursor {
+    val receiver =  object :BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val query = queryCursor()
+            entryAdapter.swapCursor(query)
+            hideCommunicationIndicator()
+        }
+    }
+
+    fun queryCursor(): Cursor {
         return database.query(DatabaseHolder.ENTRY_TABLE_NAME) {
             select(*SELECT_FIELDS)
             order(ORDER_SENTENCE)
@@ -89,15 +91,10 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         recyclerView.layoutManager = LinearLayoutManager(this)
         setupActionMode()
 
-        val flag = intent.getBooleanExtra("Drive", false)
-        if(flag) {
-            Log.d(TAG, "Google Sign back MainActivity")
-            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestScopes(Scope(DriveScopes.DRIVE)).requestEmail()
-                .build()
 
-            val client = GoogleSignIn.getClient(this, gso)
-            startActivityForResult(client.signInIntent, REQUEST_GET_DATA)
+        var res = cmdTable.getPendingList()
+        if(res.isNotEmpty()){
+            //updateFile()
         }
     }
 
@@ -202,30 +199,50 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         }
     }
 
+    fun setDriveConnect(data: Intent)  {
+        val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+
+        val googleAccount : GoogleSignInAccount = task.result!!
+        val credential : GoogleAccountCredential = GoogleAccountCredential.usingOAuth2(
+            this, listOf(DriveScopes.DRIVE_FILE, Scopes.DRIVE_APPFOLDER)
+        )
+        credential.selectedAccount = googleAccount.account
+        try {
+            googleDriveService = Drive.Builder(
+                AndroidHttp.newCompatibleTransport(),
+                JacksonFactory.getDefaultInstance(),
+                credential
+            )
+                .setApplicationName(this.getString(R.string.app_name))
+                .build()
+        }  catch (e: UserRecoverableAuthIOException) {
+            // Only the first time an error appears, so take out the intent and upload it again.
+            Log.d(TAG, "GoogleSign first Login :${e.toString()}")
+            startActivityForResult(e.intent, REQUEST_REDO)
+        }
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         when(requestCode) {
             REQUEST_GET_DATA -> {
                 //https://developers.google.com/api-client-library/java/google-api-java-client/media-upload
                 if (resultCode == Activity.RESULT_OK && data != null) {
-                    MainActivity.intent = data
+                    showCommunicationIndicator()
+                    setDriveConnect(data)
                     Intent(this, SyncService::class.java).also { intent ->
                         startService(intent)
                     }
-                    launch {
 
-                        val query = queryCursor()
-                        withContext(Dispatchers.Main) {
-                            entryAdapter.swapCursor(query)
-                            hideCommunicationIndicator()
-                        }
-                    }
+                    val intentFilter = IntentFilter()
+                    intentFilter.addAction("FINISH_SYNC");
+                    registerReceiver(receiver, intentFilter);
                 } else {
-                    Log.d("failure connect","faile upload file")
+                    Log.d(TAG,"onActivityResult failure connect")
                 }
             }
             REQUEST_REDO -> {
                 if (resultCode == Activity.RESULT_OK && data != null) {
-                    MainActivity.intent = data
+                    setDriveConnect(data)
                     Intent(this, SyncService::class.java).also { intent ->
                         startService(intent)
                     }
@@ -245,10 +262,13 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         val spaces = "drive"
         val fields = "nextPageToken, files(id, name, modifiedTime, parents)"
         cmdTable.insertGetDriveInfo(q, spaces, fields)
-        showCommunicationIndicator()
-        Intent(this, SyncService::class.java).also { intent ->
-            startService(intent)
-        }
+
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestScopes(Scope(DriveScopes.DRIVE)).requestEmail()
+            .build()
+
+        val client = GoogleSignIn.getClient(this, gso)
+        startActivityForResult(client.signInIntent,REQUEST_GET_DATA)
     }
 
     override fun onStop() {
@@ -260,6 +280,7 @@ class MainActivity : AppCompatActivity(), CoroutineScope {
         entryAdapter.swapCursor(null)
         database.close()
         cmdTable.close()
+        //unregisterReceiver(receiver)
         super.onDestroy()
     }
 
