@@ -59,21 +59,6 @@ class TextEditorActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
     }
 
-    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
-        getMenuInflater().inflate(R.menu.text_editor_menu, menu);
-        return super.onCreateOptionsMenu(menu)
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem) = when (item.itemId) {
-        R.id.action_save -> {
-            saveFile()
-            true
-        }
-        else -> {
-            super.onOptionsItemSelected(item)
-        }
-    }
-
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         data?.let {
             if(listTextView.handleOnActivityResult(requestCode, resultCode, it)) {
